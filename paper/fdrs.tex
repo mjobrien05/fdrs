@@ -1,0 +1,659 @@
+\documentclass[11pt]{article}
+\usepackage{amsthm}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}    % needed for including graphics e.g. EPS, PS
+\textheight 23.4cm \textwidth 14.65cm 
+\oddsidemargin 0.375in 
+\evensidemargin 0.375in 
+\topmargin  -0.55in
+\pagestyle{empty}       % Uncomment if don't want page numbers
+
+\newcommand{\inv}{^{-1}}
+\newcommand{\half}{^{\frac 12}}
+\newcommand{\plus}{^+}
+\newcommand{\minus}{^-}
+\newcommand{\inner}[2]{\langle #1, #2\rangle}
+\newcommand{\argmin}[1]{\underset{#1}{\operatorname{arg\,min}}\;}
+\newcommand{\sub}{\partial}
+\def\grad {{\nabla}}
+
+\usepackage{cleveref} % must come before algorithm, for some reason
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+\newtheorem{thrm}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{prb}{Problem}
+\newtheorem{assum}{Assumption}
+
+\crefname{algocf}{Algorithm}{Algorithms}
+\Crefname{algocf}{Algorithm}{Algorithms}
+\crefname{Figure}{Figure}{Figures}
+\Crefname{figure}{Figure}{Figures}
+\crefname{equation}{equation}{equations}
+\Crefname{equation}{Equation}{Equations}
+\crefname{assum}{assumption}{assumptions}
+\Crefname{assum}{Assumption}{Assumptions}
+\crefname{prb}{problem}{problems}
+\Crefname{prb}{Problem}{Problems}
+\crefname{lemma}{Lemma}{Lemma}
+\Crefname{lemma}{Lemma}{Lemmas}
+
+\begin{document}
+\title{An Acceleration of the Douglas Rachford Splitting Algorithm}
+\maketitle
+\tableofcontents
+\begin{abstract}
+The bullets are from Tom's outline, now incorporated within the main document.
+\end{abstract}
+\section{Introduction}
+\label{sec:intro}
+
+
+\begin{itemize}
+\item Why do we need splitting methods
+\item Common problem in imaging require large numberd of unknown
+\item ``Big Data'' applications have large number of unknowns
+\item We need methods that can handle sophisitcated problems, yet have ``cheap'' steps
+\end{itemize}
+
+%Define the subgradient of $f$ as 
+
+%\begin{align}
+%\sub f(z) = \{p \in \mathcal{R}^n : f(v) \ge f(z) + \inner{p}{v-z} \;\forall v \in \mathcal{R}^n\}
+%\end{align}
+
+%A convex function $f$ lies above its tangent line:
+
+%\begin{align}
+%f(y) \ge f(x) + \inner {\sub f(x)}{y-x}, \label{prop:convex}
+%\end{align}
+
+%\noindent
+%where $\sub$ is the subdifferential operator, or the set of all
+%subgradients of $f$.  If $f$ is differentiable with gradient $\grad
+%f$, then $\grad f = \sub f$.
+
+\noindent This manuscript considers the problem 
+
+\begin{prb}
+minimize $F(\lambda) = H(\lambda) + G(\lambda)$, \label{prb:1}
+\end{prb}
+
+\noindent for convex $H$ and $G$, where $\lambda \in \mathbb{R}^N$.
+In this manuscript, we will focus on solving \cref{prb:1} with the
+additional given:
+
+\begin{assum}
+\emph{$H$ and $G$ have a Lipschitz continuous gradients, with Lipschitz constants $L(\grad H) = \sigma_H$ and $L(\grad G) = \sigma_G$.} \label{assum:1}
+\end{assum}
+
+\noindent With this additional assumption, we can prove a stronger
+convergent result for an accelerated Douglas Rachford splitting
+algorithm.  Before we introduce the algorithm, we introduce a few
+important properties and definitions.
+
+\subsection{Terminology and Notation}
+
+\begin{itemize}
+\item Define notation for norms, etc..
+\item Define strongly convex, convex conjugate, Lipschitz constant, and whatever else we use
+\end{itemize}
+
+If a function $f$ has a Lipschitz continuous gradient with Lipschitz
+constant $\sigma$, then
+
+\begin{align}
+f(y) \le f(x) + \inner{\grad f(x)}{y-x} + \frac {\sigma}2 ||y-x||^2. \label{prop:lipschitzcontgrad}
+\end{align}
+
+\subsection{Splitting Methods}
+
+\subsubsection{Douglas Rachford Splitting}
+\begin{itemize}
+\item History and references of inventors
+\item Introduce different forms of the method, and show their equivalence (e.g. repeat stuff from Ernie's paper)
+\item Mention that the method is also equivalent to ADMM
+\item State ADMM algortihm and discuss equivalence
+\end{itemize}
+
+\noindent Consider the following algorithm for finding a solution
+$\lambda^\star = \argmin \lambda F(\lambda)$, called Douglas-Rachford
+Splitting (DRS).  In order to minimize $F(\lambda) = H(\lambda) +
+G(\lambda)$, we consider the problem of solving
+
+\begin{align}
+\frac {d\lambda}{dt} + \grad H(\lambda) + \grad G(\lambda) = 0.
+\end{align}
+
+\noindent Then, iterating
+
+\begin{align}
+&\frac {\lambda_{k+1/2} - \lambda_k}\tau + \grad H(\lambda_{k+1/2}) + \grad G(\lambda_k) = 0 \\
+&\frac {\lambda_{k+1} - \lambda_k}\tau + \grad H(\lambda_{k+1/2}) + \grad G(\lambda_{k+1}) = 0
+\end{align}
+
+\noindent to steady state produces a solution to $\grad H(\lambda) +
+\grad G(\lambda)$.  Rearranging these iterates, we arrive at
+
+\begin{align}
+&\lambda_{k+1/2} + \tau\grad H(\lambda_{k+1/2}) = \lambda_k - \tau\grad G(\lambda_k) \label{eq:derivation:1}\\
+&\lambda_{k+1} + \tau\grad G(\lambda_{k+1}) = \lambda_k - \tau\grad H(\lambda_{k+1/2}). \label{eq:derivation:2}
+\end{align}
+
+\noindent The \cref{eq:derivation:1} can be written as
+
+\begin{align}
+\lambda_{k+1/2} = J_{\tau\grad H}(\lambda_k - \tau\grad G(\lambda_k)), \label{eq:drsprox:1}
+\end{align}
+
+\noindent and \cref{eq:derivation:2} is equivalent to
+
+\begin{align}
+\lambda_{k+1} &= J_{\tau\grad G}(\lambda_k - \tau\grad H(\lambda_{k+1/2})). \label{eq:drsprox:2}
+\end{align}
+
+\noindent The steps in \cref{eq:drsprox:1,eq:drsprox:2} form the core
+subroutine of the Douglas Rachford algorithms, which is given in
+\cref{alg:DRSstep}.
+
+\begin{algorithm}[!]
+\caption{$\texttt{DRSstep}(\lambda\minus)$}
+\label{alg:DRSstep}
+\begin{algorithmic}[1]
+\REQUIRE $\lambda\minus$
+\STATE $\lambda\half = J_{\tau \grad H}(\lambda\minus - \tau \grad G(\lambda\minus)) = \argmin{\lambda} \tau H(\lambda) + \frac 12||\lambda - \lambda\minus + \tau \grad G(\lambda\minus)||^2$
+\STATE $\lambda\plus = J_{\tau \grad G}(\lambda\half + \tau \grad G(\lambda\minus)) = \argmin{\lambda} \tau G(\lambda) + \frac 12||\lambda - \lambda\half - \tau \grad G(\lambda\minus)||^2$
+\RETURN {$\lambda\plus$}
+\end{algorithmic}
+\end{algorithm}
+
+\noindent Douglas Rachford splitting is then prescribed by
+\cref{alg:drs}:
+
+\begin{algorithm}[!]
+\caption{DRS}
+\label{alg:drs}
+\begin{algorithmic}[1]
+\REQUIRE $\lambda_0 \in R^N$
+\FOR{$k = 0,1,2,\ldots$}
+  \STATE $\lambda_{k+1} = \texttt{DRSstep}(\lambda_k)$
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Optimality Conditions and Residuals}
+
+The optimality conditions for \cref{alg:DRSstep} are:
+
+\begin{align}
+\lambda\minus - \lambda\half &= \tau \left(\grad G(\lambda\minus) + \grad H(\lambda\half) \right) \label{opt:drs:1}\\
+\lambda\plus - \lambda\half &= \tau \left(\grad G(\lambda\minus) - \grad G(\lambda\plus)\right) \label{opt:drs:2}
+\end{align}
+
+\noindent The residual for \cref{alg:drs} is
+
+\begin{align}
+r_k = ||\grad G(\lambda_k) + \grad H(\lambda_k)|| \label{eq:res}.
+\end{align}
+
+
+\section{Optimal Splitting Methods}
+Prior Work:  State methods and give references.
+
+\subsection{Nesterov Acceleration}
+\begin{itemize}
+\item Give some history:  Gradient methods are very effective for simple problems, but they converge slow, and Nesterov invented a way to make them fast
+\item State gradient descent method.  This method has $O(1/k)$ complexity.
+\item State Nesterov method, this has $O(1/k^2)$ complexity
+\end{itemize}
+
+\subsection{Guler's Fast Proximal Point}
+\subsection{FISTA}
+\subsection{Goldfarb's Fast ADMM}
+\subsection{Tom's Fast ADMM}
+\subsection{FDRS}
+State that there's no known fast DRS.  We propose a new fast DRS.  the approach will follow Tom's approach for ADMM, but by working on DRS, we will prove stronger convergence results.
+
+
+\section{Preliminary Results}
+
+For the arguments presented here, we will leverage \cref{alg:DRSstep},
+and use the corresponding notation.  We will also need the following
+alternate expression, which follows from
+\cref{eq:derivation:1,eq:drsprox:2}:
+
+\begin{align}
+\begin{split}
+\lambda\plus &= J_{\tau\grad G}(\lambda\minus - \tau\grad H(\lambda\half)) \\
+&= \argmin{\lambda} \tau G(\lambda) + \frac 12||\lambda - \lambda\minus + \tau \grad H(\lambda\half)||^2.  \label{eq:drsprox:2:alt} 
+\end{split}
+\end{align}
+
+\noindent From \cref{eq:drsprox:2:alt}, we can derive an alternate (and equivalent) optimality condition for the second step of \cref{alg:DRSstep}:
+
+\begin{align}
+\lambda\minus - \lambda\plus &= \tau (\grad G(\lambda\plus) + \grad H(\lambda\half)) \label{opt:drs:2:alt}
+\end{align}
+
+
+\noindent Tom says: In this first result [this coming lemma], don't assume that
+the energy is differentiable.  This lemma will hold if we either (a)
+use a line search to guarantee inequalities, or (b) have Lipschitz
+constants for the gradients.
+
+\begin{lemma}
+\label{lem:1}
+Suppose that $\tau^3 \le \frac 1{\sigma_H\sigma_G^2}$.  Then for any $\gamma \in R^N$,
+\begin{align*}
+F(\gamma) - F(\lambda\plus) \ge \tau\inv\inner{\gamma - \lambda\minus}{\lambda\minus - \lambda^+} + \frac 1{2\tau}||\lambda-\lambda^+||^2
+\end{align*}
+\end{lemma}
+
+\begin{proof}
+First, from \cref{opt:drs:1}, we have that 
+
+\begin{align}
+||\lambda^+ - \lambda\half|| \le \tau \sigma_G ||\lambda\minus - \lambda^+||.
+\end{align}
+
+\noindent We proceed by using the convexity of $H$ and \cref{prop:lipschitzcontgrad}.
+
+\begin{align*}
+H(\gamma) - H(\lambda\plus) &\ge H(\lambda\half) + \inner{\grad H(\lambda\half)}{\gamma - \lambda\half} \\
+&\quad - \left(H(\lambda\half) + \inner{\grad H(\lambda\half)}{\lambda\plus - \lambda\half} + \frac{\sigma_H}{2}||\lambda\plus - \lambda\half||^2\right) \\
+&= \inner{\grad H(\lambda\half)}{\gamma - \lambda\plus} - \frac{\sigma_H}{2}||\lambda\plus - \lambda\half||^2 \\
+&\ge \inner{\grad H(\lambda\half)}{\gamma - \lambda\plus} - \frac{\sigma_H\tau^2\sigma_G^2}{2}||\lambda\minus - \lambda\plus||^2 \\
+&\ge \inner{\grad H(\lambda\half)}{\gamma - \lambda\plus} - \frac{1}{2\tau}||\lambda\minus - \lambda\plus||^2 \\
+\end{align*}
+
+By the convexity of $G$, we have
+\begin{align*}
+G(\gamma) - G(\lambda^+) &\ge G(\lambda^+) + \inner{\gamma - \lambda^+}{\grad G(\lambda^+)} - G(\lambda^+) \\
+&= \inner{\gamma - \lambda^+}{\grad G(\lambda^+)}. \\
+\end{align*}
+
+By adding the estimates together, and using \cref{opt:drs:2:alt}, we obtain
+
+\begin{align*}
+F(\gamma) - F(\lambda^+) &\ge \inner{\gamma - \lambda^+}{\grad H(\lambda\half) + \grad G(\lambda^+)} - \frac 1{2\tau} ||\lambda\minus - \lambda^+||^2 \\
+&= \frac 1\tau \inner{\gamma - \lambda^+}{\lambda\minus - \lambda^+} - \frac 1{2\tau} ||\lambda\minus - \lambda^+||^2 \\
+&= \frac 1\tau \inner{\gamma - \lambda\minus + \lambda\minus- \lambda^+}{\lambda\minus - \lambda^+} - \frac 1{2\tau} ||\lambda\minus - \lambda^+||^2 \\
+&= \frac 1\tau \inner{\gamma - \lambda}{\lambda\minus - \lambda^+} + \frac 1{2\tau} ||\lambda\minus - \lambda^+||^2. \\
+\end{align*}
+\end{proof}
+
+
+\section{Global Convergence Bounds for Unaccelerated DRS}
+
+In this section we show that for DRS, we achieve the convergence
+$F(\lambda_k) - F(\lambda^\star) \le O(1/k)$.
+
+\begin{thrm}
+Consider FDRS described by \cref{alg:drs}.  Suppose $H$ and $G$ satisfy assumption 1, and that $\tau^3 \le \frac 1{\sigma_H\sigma_G^2}$.  Then for $k > 1$ the sequence $\{\lambda_k\}$ satisfies
+
+\begin{align*}
+F(\lambda_k) - F(\lambda^\star) \le \frac {\tau ||\lambda^\star - \lambda_1||^2}{2(k-1)},
+\end{align*}
+
+\noindent where $\lambda^\star$ minimizes $F$.
+\end{thrm}
+
+\begin{proof}
+We begin exploiting \cref{lem:1} with $\gamma = \lambda^\star$ and $\lambda\minus = \lambda_k$.  Then, $\lambda^+ = \lambda_{k+1}$.
+
+\begin{align*}
+2\tau(F(\lambda^\star) - F(\lambda_{k+1})) &\ge 2\inner{\lambda^\star - \lambda_k}{\lambda_k - \lambda_{k+1}} +  ||\lambda_k - \lambda_{k+1}||^2\\
+&= ||\lambda^\star - \lambda_{k+1}||^2 - ||\lambda^\star - \lambda_k||^2.
+\end{align*}
+
+Summing over $k = 1, 2, \ldots, n-1$ yields
+
+\begin{align}
+2\tau\left((n-1)F(\lambda^\star) - \sum_{k=1}^{n-1} F(\lambda_{k+1}) \right) \ge ||\lambda^\star - \lambda_n||^2 - ||\lambda^\star - \lambda_1||^2. \label{eq:thrm1:1}
+\end{align}
+
+Using \cref{lem:1} again with $\lambda\minus = \gamma = \lambda_k$ gives
+
+\begin{align}
+2\tau \left(F(\lambda_k) - F(\lambda_{k+1})\right) \ge ||\lambda_k - \lambda_{k+1}||^2.\label{eq:thrm1:2}
+\end{align}
+
+Multiplying \cref{eq:thrm1:2} by $k-1$, and summing over $k = 1, 2, \ldots, n-1$ produces
+
+\begin{align}
+2\tau \left(\sum_{k=1}^{n-1} (k-1)\left[F(\lambda_k) - F(\lambda_{k+1})\right]\right) \ge \sum_{k=1}^{n-1} (k-1)||\lambda_k - \lambda_{k+1}||^2.\label{eq:thrm1:3}
+\end{align}
+
+The telescoping sum on the left of \cref{eq:thrm1:3} gives
+
+\begin{align}
+2\tau \left(\sum_{k=1}^{n-1} F(\lambda_{k+1}) - (n-1)F(\lambda_n)\right) \ge \sum_{k=1}^{n-1} (k-1)||\lambda_k - \lambda_{k+1}||^2.\label{eq:thrm1:4}
+\end{align}
+
+Adding \cref{eq:thrm1:1} and \cref{eq:thrm1:4} yields the bound
+
+\begin{align}
+2\tau(n-1)\left[F(\lambda^\star) - F(\lambda_n)\right] &\ge ||\lambda^\star - \lambda_n||^2 - ||\lambda^\star - \lambda_1||^2 +  \sum_{k=1}^{n-1} (k-1)||\lambda_k - \lambda_{k+1}||^2 \\
+&\ge - ||\lambda^\star - \lambda_1||^2.
+\end{align}
+
+It follows that
+
+\begin{align*}
+F(\lambda_n) - F(\lambda^\star) \le \frac{||\lambda^\star - \lambda_1||^2}{2\tau(n-1)}.
+\end{align*}
+\end{proof}
+
+%\begin{lemma}
+%Assume that Assumption 1 holds.  We have the following rates of convergence on the residual:
+%\begin{align*}
+%||r_k||^2 := \le O(1/k).
+%\end{align*}
+%\end{lemma}
+
+\section{Fast Douglas Rachford Splitting}
+
+In this section, we consider a Nesterov like acceleration of the DRS algorithm, which we term Fast Douglas-Rachford Splitting (FDRS).
+
+\begin{algorithm}
+\caption{FDRS}
+\label{alg:fdrs}
+\begin{algorithmic}[1]
+\REQUIRE $\alpha_0 = 1, \lambda_{-1} = \hat\lambda_0 \in R^N$
+\FOR{$k = 0,1,2,\ldots$}
+\STATE $\lambda_k = \texttt{DRSstep}(\hat\lambda_k)$
+\STATE $\alpha_{k+1} = \frac {1+\sqrt{1+4\alpha_k^2}}2$ \\
+\STATE $\hat\lambda_{k+1} = \lambda_k + \frac {\alpha_k - 1}{\alpha_{k+1}}(\lambda_k - \lambda_{k-1})$
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+The optimality conditions for the above algorithm are:
+
+\begin{align}
+\hat\lambda_k - \lambda_{k+1/2} &= \tau \left(\grad G(\hat\lambda_k) + \grad H(\lambda_{k+1/2}) \right) \label{opt:fdrs:1}\\
+\lambda_k - \lambda_{k+1/2} &= \tau \left(\grad G(\hat\lambda_k) - \grad G(\lambda_k)\right) \label{opt:fdrs:2} \\
+\hat\lambda_k - \lambda_k &= \tau \left(\grad G(\lambda_k) + \grad H(\lambda_{k+1/2})\right) \text{(alternate)}. \label{opt:fdrs:2:alt}
+\end{align}
+
+Define
+\begin{align*}
+s_k = \alpha_k\lambda_k - (\alpha_k - 1)\lambda_{k-1} - \lambda^\star.
+\end{align*}
+
+\begin{lemma}
+\label{lem:2}
+Let $\lambda_k$, $\hat\lambda_k$ and $\alpha_k$ be defined as in \cref{alg:fdrs}.  Then
+
+\begin{align*}
+s_{k+1} = s_k + \alpha_{k+1}(\lambda_{k+1} - \hat\lambda_{k+1}).
+\end{align*}
+\end{lemma}
+
+\begin{proof}
+First note that from the definition of $\hat\lambda_{k+1}$ we have the identity
+
+\begin{align}
+\alpha_{k+1} (\hat\lambda_{k+1} - \lambda_k) = (\alpha_k - 1)(\lambda_k - \lambda_{k-1}). \label{eq:lem:2:1}
+\end{align}
+
+Using this observation in the definition of $s_k$ produces
+
+\begin{align*}
+s_{k+1} &= \alpha_{k+1}\lambda_{k+1} - (\alpha_{k+1} - 1)\lambda_k - \lambda^\star \\
+&= \lambda_k - \lambda^\star + \alpha_{k+1}(\lambda_{k+1} - \lambda_k) \\
+&= \lambda_k - (\alpha_k - 1)\lambda_{k-1} - \lambda^\star + \alpha_{k+1}(\lambda_{k+1} - \lambda_k) + (\alpha_k - 1)\lambda_{k-1}\\
+&= \alpha_k\lambda_k - (\alpha_k - 1)\lambda_{k-1} - \lambda^\star + \alpha_{k+1}(\lambda_{k+1} - \lambda_k) - (\alpha_k - 1)(\lambda_k - \lambda_{k-1})\\
+&= s_k + \alpha_{k+1}(\lambda_{k+1} - \lambda_k) - (\alpha_k - 1)(\lambda_k - \lambda_{k-1})\\
+&= s_k + \alpha_{k+1}(\lambda_{k+1} - \lambda_k) - \alpha_{k+1}(\hat\lambda_{k+1} - \lambda_k)\\
+&= s_k + \alpha_{k+1}(\lambda_{k+1} - \hat\lambda_{k+1}).\\
+\end{align*}
+\end{proof}
+
+\noindent \Cref{lem:1,lem:2} combine for the following estimate.
+
+\begin{lemma}
+\label{lem:3}
+Suppose that $H$ and $G$ satisfy Assumption 1 and that $G$ satisfies Assumption 2.  The iterates generated by \cref{alg:fdrs} without restart and the sequence $\{s_k\}$ obey the following relation:
+
+\begin{align*}
+||s_{k+1}||^2 - ||s_k||^2 \le 2\alpha_k^2\tau \left(F(\lambda^\star) - F(\lambda_k)\right) - 2\alpha_{k+1}^2 \tau\left(F(\lambda_{k+1}) - F(\lambda^\star)\right).
+\end{align*}
+\end{lemma}
+
+\begin{proof}
+To begin we apply \cref{lem:1} with $\gamma = \lambda_k$ and $\lambda\minus = \hat\lambda_{k+1}$, which gives $\lambda^+ = \lambda_{k+1}$.  We then have the following bound:
+
+\begin{align}
+\label{eq:lem:3:1}
+F(\lambda_k) - F(\lambda_{k+1}) \ge \frac 1\tau\inner{\hat\lambda_{k+1} - \lambda_k}{\lambda_{k+1} - \hat\lambda_{k+1}} + \frac 1{2\tau}||\lambda_{k+1} - \hat\lambda_{k+1}||^2.
+\end{align}
+
+\noindent Applying \cref{lem:1} again with $\gamma = \lambda^\star$ and $\lambda\minus = \hat\lambda_{k+1}$ yields
+
+\begin{align}
+\label{eq:lem:3:2}
+F(\lambda^\star) - F(\lambda_{k+1}) \ge \frac 1\tau\inner{\hat\lambda_{k+1} - \lambda^\star}{\lambda_{k+1} - \hat\lambda_{k+1}} + \frac 1{2\tau}||\lambda_{k+1} - \hat\lambda_{k+1}||^2.
+\end{align}
+
+\noindent Next, from \cref{lem:2}, we have
+
+\begin{align*}
+||s_{k+1}||^2 &= ||s_k + \alpha_{k+1}(\lambda_{k+1} - \hat\lambda_{k+1})||^2 \\
+&= ||s_k||^2 + 2\alpha_{k+1}\inner{s_k}{\lambda_{k+1} - \hat\lambda_{k+1}} + \alpha_{k+1}^2||\lambda_{k+1} - \hat\lambda_{k+1}||^2. \\
+\end{align*}
+
+\noindent Rearranging this yields
+
+\begin{align*}
+||s_{k+1}||^2 - ||s_k||^2 &=  2\alpha_{k+1}\inner{s_k}{\lambda_{k+1} - \hat\lambda_{k+1}} + \alpha_{k+1}^2||\lambda_{k+1} - \hat\lambda_{k+1}||^2 \\
+&= 2\alpha_{k+1}\inner{\alpha_k\lambda_k - (\alpha_k - 1)\lambda_{k-1} - \lambda^\star}{\lambda_{k+1} - \hat\lambda_{k+1}} \\
+&\quad + \alpha_{k+1}^2||\lambda_{k+1} - \hat\lambda_{k+1}||^2 \\
+&= 2\alpha_{k+1}\inner{\alpha_{k+1}\hat\lambda_{k+1} + (1 - \alpha_{k+1})\lambda_k - \lambda^\star}{\lambda_{k+1} - \hat\lambda_{k+1}} \\
+&\quad + \alpha_{k+1}^2||\lambda_{k+1} - \hat\lambda_{k+1}||^2 \quad\text{from identity \cref{eq:lem:2:1}}\\ 
+&= 2\alpha_{k+1}\inner{(\alpha_{k+1} - 1)(\hat\lambda_{k+1} - \lambda_k) + \hat\lambda_{k+1} - \lambda^\star}{\lambda_{k+1} - \hat\lambda_{k+1}} \\
+&\quad + \alpha_{k+1}^2||\lambda_{k+1} - \hat\lambda_{k+1}||^2 \\
+&= 2\alpha_{k+1}(\alpha_{k+1} - 1)\inner{\hat\lambda_{k+1} - \lambda_k}{\lambda_{k+1} - \hat\lambda_{k+1}} \\
+&\quad + 2\alpha_{k+1}\inner{\hat\lambda_{k+1} - \lambda^\star}{\lambda_{k+1} - \hat\lambda_{k+1}} + \alpha_{k+1}^2||\lambda_{k+1} - \hat\lambda_{k+1}||^2 \\
+&= 2\alpha_{k+1}(\alpha_{k+1} - 1)\left(\inner{\hat\lambda_{k+1} - \lambda_k}{\lambda_{k+1} - \hat\lambda_{k+1}} + \frac 12 ||\lambda_{k+1} - \hat\lambda_{k+1}||^2\right) \\
+&\quad + 2\alpha_{k+1}\left(\inner{\hat\lambda_{k+1} - \lambda^\star}{\lambda_{k+1} - \hat\lambda_{k+1}} + \frac 12 ||\lambda_{k+1} - \hat\lambda_{k+1}||^2\right). \\
+\end{align*}
+
+\noindent Observe that $\alpha_{k+1} = \alpha_{k+1}^2 - \alpha_k^2$.  Using this, and the estimates \cref{eq:lem:3:1} and \cref{eq:lem:3:2} with the above equality yields
+
+\begin{align*}
+||s_{k+1}||^2 - ||s_k||^2 &\le 2\alpha_{k+1}\tau(\alpha_{k+1} - 1)(F(\lambda_k) - F(\lambda_{k+1})) \\
+&\quad + 2\alpha_{k+1}\tau(F(\lambda^\star) - F(\lambda_{k+1})) \\
+&= 2\alpha_{k+1}(\alpha_{k+1} - 1)\tau F(\lambda_k) + 2\alpha_{k+1}\tau F(\lambda^\star) \\
+&\quad - 2\alpha_{k+1}^2\tau F(\lambda_{k+1})\\
+&= 2\alpha_k^2\tau F(\lambda_k) + 2\left(\alpha_{k+1}^2-\alpha_k^2\right)\tau F(\lambda^\star) \\
+&\quad - 2\alpha_{k+1}^2\tau F(\lambda_{k+1})\\
+&= 2\alpha_k^2\tau\left[F(\lambda_k) - F(\lambda^\star)\right] - 2\alpha_{k+1}^2\tau\left[F(\lambda_{k+1}) - F(\lambda^\star)\right].\\
+\end{align*}
+
+\end{proof}
+
+\begin{thrm}
+Suppose that $H$ and $G$ satisfy Assumption 1 and that $G$ satisfies Assumption 2.  The iterates $\lambda_k$ generated by \cref{alg:fdrs} without restart satisfy
+\begin{align*}
+F(\lambda_k) - F(\lambda^\star) \le \frac{2\tau||\hat\lambda_0 - \lambda^\star||^2}{(k+2)^2}.
+\end{align*}
+\end{thrm}
+
+\begin{proof}
+\Cref{lem:3} can be rearranged as
+
+\begin{align*}
+||s_{k+1}||^2 + 2\alpha_{k+1}^2 \tau\left[F(\lambda_{k+1}) - F(\lambda^\star)\right] \le ||s_k||^2 + 2\alpha_k^2\tau \left[F(\lambda_k) - F(\lambda^\star)\right].
+\end{align*}
+
+Recalling that $\alpha_0 = 1$, induction then implies that 
+
+\begin{align}
+\label{eq:thrm:2:1}
+||s_{k+1}||^2 + 2\alpha_{k+1}^2 \tau\left[F(\lambda_{k+1}) - F(\lambda^\star)\right] \le ||s_0||^2 + 2\tau \left[F(\lambda_0) - F(\lambda^\star)\right],
+\end{align}
+
+Then applying \cref{eq:lem:3:2} with $k = 0$ gives
+
+\begin{align}
+\label{eq:thrm:2:2}
+F(\lambda^\star) - F(\lambda_0) \ge \frac 1\tau\inner{\hat\lambda_0 - \lambda^\star}{\lambda_0 - \hat\lambda_0} + \frac 1{2\tau}||\lambda_0 - \hat\lambda_0||^2 = \frac 1{2\tau}\left(||\lambda_0 - \lambda^\star||^2 - ||\hat\lambda_0 - \lambda^\star||^2\right).
+\end{align}
+
+Applying estimates \cref{eq:thrm:2:1} and \cref{eq:thrm:2:2} to \cref{lem:3} we have 
+
+\begin{align*}
+2\alpha_{k+1}^2\tau(F(\lambda_{k+1}) - F(\lambda^\star)) &\le ||s_k||^2 - ||s_{k+1}||^2 + 2\alpha_k^2\tau\left[F(\lambda_k) - F(\lambda^\star)\right] \\
+&\le ||s_k||^2 + 2\alpha_k^2\tau\left[F(\lambda_k) - F(\lambda^\star)\right] \\
+&\le ||s_0||^2 + 2\tau\left[F(\lambda_0) - F(\lambda^\star)\right] \\
+&= ||\lambda_0 - \lambda^\star||^2 + 2\tau\left[F(\lambda_0) - F(\lambda^\star)\right] \\
+&\le ||\lambda_0 - \lambda^\star||^2 + ||\hat\lambda_0 - \lambda^\star||^2 - ||\lambda_0 - \lambda^\star||^2 \\
+&= ||\hat\lambda_0 - \lambda^\star||^2.
+\end{align*}
+
+It then follows that
+
+\begin{align*}
+F(\lambda_k) - F(\lambda^\star) &\le \frac{||\hat\lambda_0 - \lambda^\star||^2}{2\alpha_k^2\tau}.
+\end{align*}
+
+Using the observation that $\alpha_k > \alpha_{k-1} + \frac 12 > 1 + \frac k2$ gives
+
+\begin{align*}
+F(\lambda_k) - F(\lambda^\star) &\le \frac{2||\hat\lambda_0 - \lambda^\star||^2}{(k+2)^2\tau}.
+\end{align*}
+
+\end{proof}
+
+\section{Fast Douglas Rachford Splitting for Non-Differential Problems}
+
+We consider a variant of \cref{alg:fdrs} in which we impose a restart
+condition, which reverts the algorithm to the traditional Douglas
+Rachford Splitting method in certain cases, which ensures convergence.
+The restart rule relies on a combined residual, which bounds the
+residual for \cref{prb:1}:
+
+\begin{align}
+\begin{split}
+r_k &= ||\grad G(\lambda_k) + \grad H(\lambda_k)|| \\
+&\le || \grad G(\lambda_k) + \grad H(\lambda_{k+1/2}) || \\
+&\quad + || \grad H(\lambda_k) - \grad H(\lambda_{k+1/2}) || =: c_k.
+\end{split}
+\end{align}
+
+\noindent The algorithm is then given by \cref{alg:fdrsRestart}.
+Notice that Lines 1-2 produce $\lambda_{k+1} =
+\texttt{DRSstep}(\hat\lambda_k)$, as in \cref{alg:fdrs}.
+
+
+\begin{algorithm}
+\caption{FDRS with Restart}
+\label{alg:fdrsRestart}
+\begin{algorithmic}[1]
+\REQUIRE $\alpha_0 = 1, \lambda_{-1} = \hat\lambda_0 \in R^N$
+\FOR{$k = 0,1,2,\ldots$}
+\STATE $\lambda_{k+1/2} = J_{\tau \grad H}(\hat\lambda_k - \tau \grad G(\hat\lambda)) = \argmin{\lambda} \tau H(\lambda) + \frac 12||\lambda - \hat\lambda_k + \tau \grad G(\hat\lambda_k)||^2$
+\STATE $\lambda_{k+1} = J_{\tau \grad G}(\lambda_{k+1/2} + \tau \grad G(\hat\lambda)) = \argmin{\lambda} \tau G(\lambda) + \frac 12||\lambda - \lambda_{k+1/2} - \tau \grad G(\hat\lambda_k)||^2$
+  \STATE $c_k = ||\grad G(\lambda_{k+1}) + \grad H(\lambda_{k+1/2})|| + ||\grad H(\lambda_{k+1}) - \grad H(\lambda_{k+1/2})||$
+  \IF{$c_k < \eta c_{k-1}$}
+  \STATE $\alpha_{k+1} = \frac {1+\sqrt{1+4\alpha_k^2}}2$ \\
+  \STATE $\hat\lambda_{k+1} = \lambda_k + \frac {\alpha_k - 1}{\alpha_{k+1}}(\lambda_k - \lambda_{k-1})$
+  \ELSE
+  \STATE $\alpha_{k+1} = 1$, $\lambda_{k+1/2} = \lambda_{k-1}$
+  \STATE $c_k \leftarrow \eta\inv c_{k-1}$
+  \ENDIF
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+\begin{lemma}
+\label{lem:4}
+The iterates $\{\lambda_k, \lambda_{k+1/2}\}$ produced in \cref{alg:fdrsRestart} satisfy
+\begin{align}
+\begin{split}
+|| \grad G(\lambda_{k+1}) + \grad H(\lambda_{k+3/2}) || + || \grad H(\lambda_{k+1}) - \grad H(\lambda_{k+3/2}) || \\
+\le || \grad G(\lambda_k) + \grad H(\lambda_{k+1/2}) || + || \grad H(\lambda_k) - \grad H(\lambda_{k+1/2}) ||.
+\end{split}
+\end{align}
+\end{lemma}
+
+\begin{proof}
+Blah blah blah cite Yuan and He.  (But they do it for ADMM....)
+\end{proof}
+
+\begin{thrm}
+For convex $H$ and $G$, \cref{alg:fdrsRestart} converges:
+
+\begin{align}
+\lim_{k\rightarrow \infty} c_k = 0.
+\end{align}
+\end{thrm}
+\begin{proof}
+We begin with some terminology. Each iteration of
+\cref{alg:fdrsRestart} is of one of three types: 
+
+\begin{enumerate}
+\item A â€œrestartâ€ iteration occurs when the inequality in Step 5 of
+  the algorithm is not satisfied.
+\item A â€œnon-acceleratedâ€ iteration occurs immediately after
+a â€œrestartâ€ iteration. On such iterations $\alpha_k = 1$, and so the
+acceleration (Lines 6-7) of \cref{alg:fdrsRestart} are inactivated making the
+iteration equivalent to the original ADMM. 
+\item An â€œacceleratedâ€ iteration is any iteration that is not
+  â€œrestartâ€ or â€œunaccelerated.â€  On such iterations, Lines 6-7 of the
+  algorithm are invoked and $\alpha_k > 1$.  
+\end{enumerate}
+Suppose that a restart occurs at iteration k. Then the value
+$\lambda_k$ are returned to their values at iteration $k-1$, which has
+combined residual $c_{k-1}$. We also set $\alpha_{k+1} = 1$, making
+iteration $k + 1$ an unaccelerated iteration.  By \cref{lem:4} the
+combined residual is non-increasing on this iteration and so $c_{k+1}
+\le c_{k-1}$.  Note that on accelerated steps, the combined residual
+decreases by at least a factor of $\eta$. It follows that the combined
+residual satisfies 
+\begin{align}
+c_k \le c_0\eta^{\hat k},
+\end{align} 
+\noindent where $\hat k$ denotes the number of accelerated steps that
+have occurred within the first $k$ iterations.  
+
+Clearly, if the number of accelerated iterations is infinite, then we
+have $c_k \rightarrow 0$ as $k \rightarrow \infty$. In the case that
+the number of accelerated iterations is finite, then after the final
+accelerated iteration, each pair of restart and unaccelerated
+iterations is equivalent to a single iteration of the original
+unaccelerated DRS (\cref{alg:drs}) for which convergence is known
+cite[]. ô°
+\end{proof}
+
+While \cref{alg:fdrsRestart} enables us to extend accelerated DRS to
+non-differential problems, our theoretical results are weaker in this
+case because we cannot guarantee a convergence rate as we did under
+\cref{assum:1}. Nevertheless, the empirical behavior of the restart
+method (Algorithm 8) is superior to that of the original ADMM
+(Algorithm 1), even in the case of strongly convex functions. Similar
+results have been observed for restarted variants of other accelerated
+schemes [35].
+
+\section{Backtracking}
+
+State the line search method.  I (TOM) will do some experiments to
+figure out the best way to do this, but try to structure the Lemma in
+the preliminaries section so the Lipschitz gradient part is separate
+from the main inequality Lemma.
+
+\section{Relation to Other Work}
+ \begin{itemize}
+ \item Global Convergence rates for DRS have also been proved by Binsheng He (I'll dig this paper up for you), but without any acceleration.
+ \item This is similar to the ADMM method, however our results are a stronger because of the line search - we can gaurantee convergence for non-differentiable problems (i.e. the duals of weakly convex problems that would normally be solved with ADMM)
+ \end{itemize}
+
+\section{Numerical Results}
+ \begin{itemize}
+ \item Do some simple quadratic programming examples
+ \item We need to come up with a few more examples of things that DRS is good for.  There's tons of these, but we have to pick a few that are easy to code.
+ \end{itemize}
+\end{document}
